@@ -1,0 +1,126 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: #0d1117;
+  color: #e6edf3;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  padding: 12px;
+}
+
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  border-bottom: 1px solid #30363d;
+  padding-bottom: 8px;
+}
+
+h1 {
+  font-size: 1.2rem;
+  color: #58a6ff;
+}
+
+button {
+  background-color: #238636;
+  color: #ffffff;
+  border: none;
+  padding: 10px 16px;
+  border-radius: 6px;
+  font-weight: bold;
+  font-size: 0.9rem;
+}
+
+button:active {
+  background-color: #2ea043;
+}
+
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background-color: #161b22;
+  border: 1px solid #30363d;
+  border-radius: 8px;
+  padding: 16px;
+}
+
+.card h2 {
+  font-size: 0.9rem;
+  color: #8b949e;
+  margin-bottom: 8px;
+}
+
+/* タコメーター演出 */
+.display-main {
+  text-align: center;
+  padding: 12px 0;
+}
+
+#rpm-value {
+  font-size: 3.5rem;
+  font-weight: bold;
+  color: #3fb950;
+  font-family: monospace;
+}
+
+.unit {
+  font-size: 1rem;
+  color: #8b949e;
+}
+
+/* 校正パネル */
+.calibration-panel {
+  margin-top: 12px;
+  background-color: #21262d;
+  padding: 10px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.calibration-panel select, 
+.calibration-panel input {
+  width: 100%;
+  margin-top: 6px;
+  margin-bottom: 10px;
+  background: #0d1117;
+  color: #fff;
+  border: 1px solid #30363d;
+  padding: 6px;
+  border-radius: 4px;
+}
+
+/* グリッドレイアウト */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.metric {
+  background-color: #21262d;
+  padding: 12px;
+  border-radius: 6px;
+  text-align: center;
+}
+
+.metric .label {
+  display: block;
+  font-size: 0.75rem;
+  color: #8b949e;
+  margin-bottom: 4px;
+}
+
+.metric .value {
+  font-size: 1.8rem;
+  font-weight: bold;
+  color: #79c0ff;
+  font-family: monospace;
+}
