@@ -1,0 +1,25 @@
+name: Gemini Auto Coder
+
+on:
+  issues:
+    types: [opened, labeled]
+
+jobs:
+  generate-code:
+    if: contains(github.event.issue.labels.*.name, 'make-code') || github.event.action == 'opened'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Call Gemini API and Create PR
+        uses: peter-evans/create-pull-request@v6
+        env:
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        with:
+          commit-message: "feat: Gemini generated code based on Issue #${{ github.event.issue.number }}"
+          title: "🤖 [Gemini] {{ github.event.issue.title }}"
+          body: |
+            GeminiがIssue #${{ github.event.issue.number }} の要望に基づいてコードを自動生成・変更しました。
+            内容を確認して問題なければマージしてください。
+          branch: "gemini/issue-${{ github.event.issue.number }}"
