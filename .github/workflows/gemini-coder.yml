@@ -38,7 +38,6 @@ jobs:
           python -c "
           import os
           import re
-          import subprocess
           from google import genai
 
           # 1. API初期化
@@ -50,7 +49,7 @@ jobs:
           issue_title = os.environ.get('ISSUE_TITLE', '')
           issue_body = os.environ.get('ISSUE_BODY', '')
 
-          # 2. プロンプト（レスポンス形式を明確に指定）
+          # 2. プロンプト
           prompt = f'''
           あなたは優秀なソフトウェアエンジニアです。
           以下のIssueの指示に従ってコードを作成または修正してください。
@@ -59,8 +58,8 @@ jobs:
           【内容】: {issue_body}
 
           回答は必ず修正後の完全なファイル内容だけを、以下の形式（コードブロック）で出力してください。
-          \`\`\`python:filename
-          # コード
+          \`\`\`python:generated_code.py
+          # ここにコード
           \`\`\`
           '''
 
@@ -70,13 +69,20 @@ jobs:
           print('--- Gemini Output ---')
           print(res_text)
 
-          # 3. 生成結果からコードとファイル名を抽出して書き込み
-          # 簡易的に最初のコードブロックを抽出
-          code_match = re.search(r'```(?:\w+:)?([^\n]+)?\n(.*?)```', res_text, re.DOTALL)
-          if code_match:
-              filename = code_match.group(1).strip() if code_match.group(1) else 'generated_code.py'
-              code_content = code_match.group(2)
+          # 3. エラーが起きない安全なコードブロック抽出ロジック
+          pattern = r'```(?:[\w\.\-]+:)?([^\n]*)\n(.*?)```'
+          matches = re.findall(pattern, res_text, re.DOTALL)
+
+          if matches:
+              header_filename, code_content = matches[0]
+              # ヘッダーからファイル名を取得、無ければデフォルト名
+              filename = header_filename.strip() if header_filename.strip() else 'generated_code.py'
               
+              # ディレクトリが存在しない場合のケア（安全対策）
+              dir_name = os.path.dirname(filename)
+              if dir_name:
+                  os.makedirs(dir_name, exist_ok=True)
+
               with open(filename, 'w', encoding='utf-8') as f:
                   f.write(code_content)
               print(f'Successfully updated: {filename}')
@@ -97,7 +103,7 @@ jobs:
           # 変更があるか確認
           if [ -n "$(git status --porcelain)" ]; then
             BRANCH_NAME="fix/issue-${ISSUE_NUMBER}"
-            git checkout -b $BRANCH_NAME
+            git checkout -b $BRANCH_NAME || git checkout $BRANCH_NAME
             git add .
             git commit -m "auto: fix for Issue #${ISSUE_NUMBER} - ${ISSUE_TITLE}"
             git push origin $BRANCH_NAME --force
