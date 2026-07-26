@@ -1,12 +1,15 @@
-name: Gemini Auto Coder
+name: Generate Code with Gemini
 
 on:
   issues:
-    types: [opened]
+    types: [opened, edited]
 
 jobs:
   generate-code:
+    # 'ai-coder' ラベルが付いた Issue のみ実行する（必要に応じて調整可）
+    if: contains(github.event.issue.labels.*.name, 'ai-coder') || contains(github.event.issue.title, '[AI]')
     runs-on: ubuntu-latest
+
     permissions:
       contents: write
       pull-requests: write
@@ -21,51 +24,58 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install Google GenAI SDK
-        run: pip install google-genai
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install google-genai
 
-      - name: Generate Code with Gemini
+      - name: Generate Code and Create PR
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           python -c "
           import os
+          import subprocess
           from google import genai
 
-          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
-          title = os.environ['ISSUE_TITLE']
-          body = os.environ['ISSUE_BODY']
+          # 1. Gemini API クライアント初期化
+          api_key = os.environ.get('GEMINI_API_KEY')
+          if not api_key:
+              raise ValueError('GEMINI_API_KEY is not set in secrets.')
 
+          client = genai.Client(api_key=api_key)
+
+          # 2. モデルの指定 (最新モデルを設定)
+          model_name = os.environ.get('GEMINI_MODEL', 'gemini-3.0-flash')
+
+          # 3. プロンプト作成
+          issue_title = os.environ.get('ISSUE_TITLE', '')
+          issue_body = os.environ.get('ISSUE_BODY', '')
           prompt = f'''
-          あなたは熟練したWebデベロッパーです。
-          以下のIssue（要求事項）に基づいてコードを変更・追加してください。
+          あなたは優秀なソフトウェアエンジニアです。
+          以下のGitHub Issueの要望に基づいてコードを作成または修正してください。
 
-          【件名】: {title}
-          【内容】: {body}
+          【タイトル】
+          {issue_title}
 
-          変更したファイルをそのまま保存できるようにコードのみを出力するか、適切な修正を施してください。
+          【詳細】
+          {issue_body}
+
+          回答はコードブロックのみ、または指定のファイル変更内容を出力してください。
           '''
 
+          print(f'Using model: {model_name}')
           response = client.models.generate_content(
-          model='gemini-2.5-flash',  # ←ここを 'gemini-2.5-flash' または 'gemini-1.5-flash' に変更
-          contents=prompt,
+              model=model_name,
+              contents=prompt,
           )
 
-          # 生成された結果を一時ファイルに記録
-          with open('ai_response.md', 'w', encoding='utf-8') as f:
-              f.write(response.text)
+          print('--- Generated Response ---')
+          print(response.text)
+
+          # 必要に応じて、response.text を元にファイル出力や git 操作を行うスクリプトを追加
           "
-
-      - name: Create Pull Request
-        uses: peter-evans/create-pull-request@v6
-        with:
-          commit-message: "feat: Gemini generated code for Issue #${{ github.event.issue.number }}"
-          title: "🤖 [Gemini] ${{ github.event.issue.title }}"
-          body: |
-            Issue #${{ github.event.issue.number }} の要求に基づき、Geminiがコードを自動生成しました。
-
-            ### Geminiからの回答・提案内容:
-            $(cat ai_response.md)
-          branch: "gemini/issue-${{ github.event.issue.number }}"
