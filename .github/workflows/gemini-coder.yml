@@ -2,24 +2,70 @@ name: Gemini Auto Coder
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened]
 
 jobs:
   generate-code:
-    if: contains(github.event.issue.labels.*.name, 'make-code') || github.event.action == 'opened'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Call Gemini API and Create PR
-        uses: peter-evans/create-pull-request@v6
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+
+      - name: Install Google GenAI SDK
+        run: pip install google-genai
+
+      - name: Generate Code with Gemini
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+          ISSUE_BODY: ${{ github.event.issue.body }}
+        run: |
+          python -c "
+          import os
+          from google import genai
+
+          client = genai.Client(api_key=os.environ['GEMINI_API_KEY'])
+          title = os.environ['ISSUE_TITLE']
+          body = os.environ['ISSUE_BODY']
+
+          prompt = f'''
+          あなたは熟練したWebデベロッパーです。
+          以下のIssue（要求事項）に基づいてコードを変更・追加してください。
+
+          【件名】: {title}
+          【内容】: {body}
+
+          変更したファイルをそのまま保存できるようにコードのみを出力するか、適切な修正を施してください。
+          '''
+
+          response = client.models.generate_content(
+              model='gemini-2.5-flash',
+              contents=prompt
+          )
+
+          # 生成された結果を一時ファイルに記録
+          with open('ai_response.md', 'w', encoding='utf-8') as f:
+              f.write(response.text)
+          "
+
+      - name: Create Pull Request
+        uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "feat: Gemini generated code based on Issue #${{ github.event.issue.number }}"
-          title: "🤖 [Gemini] {{ github.event.issue.title }}"
+          commit-message: "feat: Gemini generated code for Issue #${{ github.event.issue.number }}"
+          title: "🤖 [Gemini] ${{ github.event.issue.title }}"
           body: |
-            GeminiがIssue #${{ github.event.issue.number }} の要望に基づいてコードを自動生成・変更しました。
-            内容を確認して問題なければマージしてください。
+            Issue #${{ github.event.issue.number }} の要求に基づき、Geminiがコードを自動生成しました。
+
+            ### Geminiからの回答・提案内容:
+            $(cat ai_response.md)
           branch: "gemini/issue-${{ github.event.issue.number }}"
