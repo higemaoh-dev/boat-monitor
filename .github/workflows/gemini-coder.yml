@@ -30,48 +30,84 @@ jobs:
       - name: Generate Code and Create PR
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           ISSUE_TITLE: ${{ github.event.issue.title }}
           ISSUE_BODY: ${{ github.event.issue.body }}
           ISSUE_NUMBER: ${{ github.event.issue.number }}
         run: |
           python -c "
           import os
+          import re
+          import subprocess
           from google import genai
 
-          # 1. Gemini API クライアント初期化
+          # 1. API初期化
           api_key = os.environ.get('GEMINI_API_KEY')
-          if not api_key:
-              raise ValueError('GEMINI_API_KEY is not set in secrets.')
-
           client = genai.Client(api_key=api_key)
 
-          # 2. モデルの指定
-          # 常に最新のFlashモデル（現在はGemini 3系）を自動使用
-          model_name = os.environ.get('GEMINI_MODEL', 'gemini-flash-latest')
-
-          # 3. プロンプト作成
+          model_name = os.environ.get('GEMINI_MODEL', 'gemini-3.5-flash')
+          issue_number = os.environ.get('ISSUE_NUMBER')
           issue_title = os.environ.get('ISSUE_TITLE', '')
           issue_body = os.environ.get('ISSUE_BODY', '')
+
+          # 2. プロンプト（レスポンス形式を明確に指定）
           prompt = f'''
           あなたは優秀なソフトウェアエンジニアです。
-          以下のGitHub Issueの要望に基づいてコードを作成または修正してください。
+          以下のIssueの指示に従ってコードを作成または修正してください。
 
-          【タイトル】
-          {issue_title}
+          【タイトル】: {issue_title}
+          【内容】: {issue_body}
 
-          【詳細】
-          {issue_body}
-
-          回答はコードブロックのみ、または指定のファイル変更内容を出力してください。
+          回答は必ず修正後の完全なファイル内容だけを、以下の形式（コードブロック）で出力してください。
+          \`\`\`python:filename
+          # コード
+          \`\`\`
           '''
 
           print(f'Using model: {model_name}')
-          response = client.models.generate_content(
-              model=model_name,
-              contents=prompt,
-          )
+          response = client.models.generate_content(model=model_name, contents=prompt)
+          res_text = response.text
+          print('--- Gemini Output ---')
+          print(res_text)
 
-          print('--- Generated Response ---')
-          print(response.text)
+          # 3. 生成結果からコードとファイル名を抽出して書き込み
+          # 簡易的に最初のコードブロックを抽出
+          code_match = re.search(r'```(?:\w+:)?([^\n]+)?\n(.*?)```', res_text, re.DOTALL)
+          if code_match:
+              filename = code_match.group(1).strip() if code_match.group(1) else 'generated_code.py'
+              code_content = code_match.group(2)
+              
+              with open(filename, 'w', encoding='utf-8') as f:
+                  f.write(code_content)
+              print(f'Successfully updated: {filename}')
+          else:
+              print('No code block found in response.')
           "
+
+      - name: Create Pull Request via GitHub CLI
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_NUMBER: ${{ github.event.issue.number }}
+          ISSUE_TITLE: ${{ github.event.issue.title }}
+        run: |
+          # Gitの設定
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          # 変更があるか確認
+          if [ -n "$(git status --porcelain)" ]; then
+            BRANCH_NAME="fix/issue-${ISSUE_NUMBER}"
+            git checkout -b $BRANCH_NAME
+            git add .
+            git commit -m "auto: fix for Issue #${ISSUE_NUMBER} - ${ISSUE_TITLE}"
+            git push origin $BRANCH_NAME --force
+            
+            # PRの作成（既存のPRがなければ新規作成）
+            gh pr create \
+              --title "Fix Issue #${ISSUE_NUMBER}: ${ISSUE_TITLE}" \
+              --body "Closes #${ISSUE_NUMBER}\n\nGenerated automatically by Gemini." \
+              --head $BRANCH_NAME \
+              --base main || echo "PR already exists or created."
+          else
+            echo "No changes detected."
+          fi
