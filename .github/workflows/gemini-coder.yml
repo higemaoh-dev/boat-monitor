@@ -6,8 +6,6 @@ on:
 
 jobs:
   generate-code:
-    # 'ai-coder' ラベルが付いた Issue のみ実行する（必要に応じて調整可）
-    if: contains(github.event.issue.labels.*.name, 'ai-coder') || contains(github.event.issue.title, '[AI]')
     runs-on: ubuntu-latest
 
     permissions:
@@ -76,6 +74,4 @@ jobs:
 
           print('--- Generated Response ---')
           print(response.text)
-
-          # 必要に応じて、response.text を元にファイル出力や git 操作を行うスクリプトを追加
           "
