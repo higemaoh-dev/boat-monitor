@@ -3,72 +3,63 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-  <title>ボート・マルチモニター</title>
+  <title>BOAT PFD MONITOR</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header>
-    <h1>BOAT MONITOR</h1>
-    <button id="start-btn">計測開始 / センサー許可</button>
-  </header>
+  <div class="cockpit-container">
+    <!-- ヘッダー制御 -->
+    <header>
+      <div class="status-indicator">SYS OK</div>
+      <h1>BOAT GLASS COCKPIT</h1>
+      <button id="start-btn">ENGAGE INSTRUMENTS</button>
+    </header>
 
-  <main class="dashboard">
-    <!-- 回転数エリア -->
-    <section class="card tachometer">
-      <h2>推定エンジン回転数</h2>
-      <div class="display-main">
-        <span id="rpm-value">---</span> <span class="unit">RPM</span>
+    <!-- メイン計器エリア (コックピットディスプレイ) -->
+    <main class="pfd-grid">
+      <!-- 1. 中央：人工水平儀 (Attitude Indicator) -->
+      <div class="pfd-card attitude-card">
+        <div class="card-title">ATTITUDE / TILT</div>
+        <canvas id="horizonCanvas"></canvas>
       </div>
-      <!-- 校正用コントローラー -->
-      <div class="calibration-panel">
-        <label>気筒数/爆発周期設定:</label>
-        <select id="stroke-cycles">
-          <option value="1">4スト 2気筒 / 2スト 1気筒 (1パルス/回転)</option>
-          <option value="2">4スト 4気筒 / 2スト 2気筒 (2パルス/回転)</option>
-          <option value="3" selected>4スト 6気筒 / 2スト 3気筒 (3パルス/回転)</option>
-          <option value="4">4スト 8気筒 (4パルス/回転)</option>
-        </select>
-        <div class="calib-slider">
-          <label>感度/オフセット微調整: <span id="calib-val">1.0</span></label>
-          <input type="range" id="calib-multiplier" min="0.5" max="2.0" step="0.05" value="1.0">
-        </div>
-      </div>
-    </section>
 
-    <!-- 航海情報 (GPS) -->
-    <section class="card gps-info">
-      <h2>航海データ (GPS)</h2>
-      <div class="metrics-grid">
-        <div class="metric">
-          <span class="label">対地速度</span>
-          <span class="value" id="speed-value">--.-</span>
-          <span class="unit">kt (ノット)</span>
-        </div>
-        <div class="metric">
-          <span class="label">推定燃費率</span>
-          <span class="value" id="efficiency-value">--.-</span>
-          <span class="unit">kt / 1,000RPM</span>
-        </div>
+      <!-- 2. 円形アナログ風タコメーター -->
+      <div class="pfd-card gauge-card">
+        <div class="card-title">ENGINE RPM</div>
+        <canvas id="gaugeCanvas"></canvas>
+        <div class="digital-readout" id="rpm-readout">0000 <span>RPM</span></div>
       </div>
-    </section>
 
-    <!-- 船体姿勢 (ジャイロ/加速度) -->
-    <section class="card attitude">
-      <h2>船体姿勢・角速度</h2>
-      <div class="metrics-grid">
-        <div class="metric">
-          <span class="label">左右傾斜 (Pitch/Roll)</span>
-          <span class="value" id="tilt-value">--</span>
-          <span class="unit">° (度)</span>
+      <!-- 3. デジタル数値・校正パネル -->
+      <div class="pfd-card data-card">
+        <div class="metric-box">
+          <span class="m-label">SPEED (GPS)</span>
+          <span class="m-value" id="speed-val">0.0</span>
+          <span class="m-unit">KNOTS</span>
         </div>
-        <div class="metric">
-          <span class="label">角速度 (Yaw/Gyro)</span>
-          <span class="value" id="gyro-value">--</span>
-          <span class="unit">°/s</span>
+        <div class="metric-box">
+          <span class="m-label">YAW RATE</span>
+          <span class="m-value" id="yaw-val">0</span>
+          <span class="m-unit">DEG/S</span>
+        </div>
+        
+        <!-- 校正コントロール -->
+        <div class="calib-box">
+          <label>CYLINDER / STROKE</label>
+          <select id="stroke-cycles">
+            <option value="1">4s2c / 2s1c (1P/R)</option>
+            <option value="2">4s4c / 2s2c (2P/R)</option>
+            <option value="3" selected>4s6c / 2s3c (3P/R)</option>
+            <option value="4">4s8c (4P/R)</option>
+          </select>
+          <div class="slider-row">
+            <span>SENS: <span id="calib-val">1.00</span></span>
+            <input type="range" id="calib-multiplier" min="0.5" max="2.0" step="0.05" value="1.0">
+          </div>
         </div>
       </div>
-    </section>
-  </main>
+    </main>
+  </div>
 
   <script src="app.js"></script>
 </body>
