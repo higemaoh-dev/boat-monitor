@@ -37,7 +37,6 @@ jobs:
         run: |
           python -c "
           import os
-          import subprocess
           from google import genai
 
           # 1. Gemini API クライアント初期化
@@ -47,8 +46,8 @@ jobs:
 
           client = genai.Client(api_key=api_key)
 
-          # 2. モデルの指定 (最新モデルを設定)
-          model_name = os.environ.get('GEMINI_MODEL', 'gemini-3.0-flash')
+          # 2. モデルの指定 (動作確認済みの gemini-2.0-flash を設定)
+          model_name = os.environ.get('GEMINI_MODEL', 'gemini-2.0-flash')
 
           # 3. プロンプト作成
           issue_title = os.environ.get('ISSUE_TITLE', '')
