@@ -1,39 +1,236 @@
-// グローバル状態管理
+// グローバル変数
 let audioContext, analyser, microphone, dataArray;
 let calibMultiplier = 1.0;
-let strokeCycles = 3; // デフォルト：4スト6気筒想定（1回転あたり3爆発）
+let strokeCycles = 3;
 
-// 1. UIイベントリスナー
+let currentRpm = 0;
+let currentSpeed = 0.0;
+let pitchAngle = 0;
+let rollAngle = 0;
+let yawRate = 0;
+
+// キャンバス要素
+const horizonCanvas = document.getElementById('horizonCanvas');
+const gaugeCanvas = document.getElementById('gaugeCanvas');
+const hCtx = horizonCanvas.getContext('2d');
+const gCtx = gaugeCanvas.getContext('2d');
+
+// 画面解像度の同期
+function resizeCanvases() {
+  horizonCanvas.width = horizonCanvas.clientWidth;
+  horizonCanvas.height = horizonCanvas.clientHeight;
+  gaugeCanvas.width = gaugeCanvas.clientWidth;
+  gaugeCanvas.height = gaugeCanvas.clientHeight;
+}
+window.addEventListener('resize', resizeCanvases);
+
+// 初期化ボタン
 document.getElementById('start-btn').addEventListener('click', async () => {
+  resizeCanvases();
   await initAudio();
   initGPS();
   initSensors();
   document.getElementById('start-btn').style.display = 'none';
+  
+  // 描画ループ開始
+  requestAnimationFrame(renderLoop);
 });
 
+// 設定の入力
 document.getElementById('stroke-cycles').addEventListener('change', (e) => {
   strokeCycles = parseFloat(e.target.value);
 });
-
 document.getElementById('calib-multiplier').addEventListener('input', (e) => {
   calibMultiplier = parseFloat(e.target.value);
   document.getElementById('calib-val').innerText = calibMultiplier.toFixed(2);
 });
 
-// 2. 音声解析によるRPM推定 (Web Audio API)
+// --- 描画メインループ ---
+function renderLoop() {
+  drawAttitudeIndicator();
+  drawRpmGauge();
+  requestAnimationFrame(renderLoop);
+}
+
+// 1. 人工水平儀（Attitude Indicator）の描画
+function drawAttitudeIndicator() {
+  const w = horizonCanvas.width;
+  const h = horizonCanvas.height;
+  const cx = w / 2;
+  const cy = h / 2;
+
+  hCtx.clearRect(0, 0, w, h);
+  hCtx.save();
+
+  // クリッピング領域設定
+  hCtx.beginPath();
+  hCtx.arc(cx, cy, Math.min(w, h) * 0.42, 0, Math.PI * 2);
+  hCtx.clip();
+
+  // 傾き（Roll）とピッチ（Pitch）による回転・移動
+  hCtx.translate(cx, cy);
+  hCtx.rotate((rollAngle * Math.PI) / 180);
+  const pitchOffset = pitchAngle * 3; // 感度調整
+
+  // 空（ブラウン/ダークブルー）と海（ダークオリーブ）
+  hCtx.fillStyle = '#001122'; // 天井
+  hCtx.fillRect(-w, -h * 2 + pitchOffset, w * 2, h * 2);
+  
+  hCtx.fillStyle = '#112200'; // 地表/水面
+  hCtx.fillRect(-w, pitchOffset, w * 2, h * 2);
+
+  // 地平線ライン
+  hCtx.strokeStyle = '#00ff66';
+  hCtx.lineWidth = 2;
+  hCtx.beginPath();
+  hCtx.moveTo(-w, pitchOffset);
+  hCtx.lineTo(w, pitchOffset);
+  hCtx.stroke();
+
+  hCtx.restore();
+
+  // 固定ピッチマーク（自船シンボル）
+  hCtx.strokeStyle = '#ff9900';
+  hCtx.lineWidth = 3;
+  hCtx.beginPath();
+  // 左ウィング
+  hCtx.moveTo(cx - 40, cy);
+  hCtx.lineTo(cx - 15, cy);
+  hCtx.lineTo(cx - 15, cy + 10);
+  // 右ウィング
+  hCtx.moveTo(cx + 40, cy);
+  hCtx.lineTo(cx + 15, cy);
+  hCtx.lineTo(cx + 15, cy + 10);
+  // センター点
+  hCtx.arc(cx, cy, 3, 0, Math.PI * 2);
+  hCtx.stroke();
+}
+
+// 2. 円形タコメーターの描画
+function drawRpmGauge() {
+  const w = gaugeCanvas.width;
+  const h = gaugeCanvas.height;
+  const cx = w / 2;
+  const cy = h / 2;
+  const radius = Math.min(w, h) * 0.38;
+
+  gCtx.clearRect(0, 0, w, h);
+
+  // 背景アーク
+  const startAngle = 0.75 * Math.PI;
+  const endAngle = 2.25 * Math.PI;
+
+  gCtx.lineWidth = 12;
+  gCtx.strokeStyle = '#1a331a';
+  gCtx.beginPath();
+  gCtx.arc(cx, cy, radius, startAngle, endAngle);
+  gCtx.stroke();
+
+  // RPMに応じたプログレスアーク
+  const maxRpm = 6000;
+  const rpmPct = Math.min(Math.max(currentRpm / maxRpm, 0), 1);
+  const currentAngle = startAngle + (endAngle - startAngle) * rpmPct;
+
+  // ワーニングカラー（高回転で赤）
+  let color = '#00ff66';
+  if (currentRpm > 4500) color = '#ff3300';
+  else if (currentRpm > 3500) color = '#ff9900';
+
+  gCtx.strokeStyle = color;
+  gCtx.shadowBlur = 10;
+  gCtx.shadowColor = color;
+  gCtx.beginPath();
+  gCtx.arc(cx, cy, radius, startAngle, currentAngle);
+  gCtx.stroke();
+  gCtx.shadowBlur = 0; // リセット
+
+  // 針の描画
+  gCtx.save();
+  gCtx.translate(cx, cy);
+  gCtx.rotate(currentAngle);
+  gCtx.strokeStyle = '#ffffff';
+  gCtx.lineWidth = 3;
+  gCtx.beginPath();
+  gCtx.moveTo(0, 0);
+  gCtx.lineTo(radius - 5, 0);
+  gCtx.stroke();
+  gCtx.restore();
+}
+
+// --- 音声解析・センサー連動 ---
 async function initAudio() {
   try {
     const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
     audioContext = new (window.AudioContext || window.webkitAudioContext)();
     analyser = audioContext.createAnalyser();
-    
-    // FFTサイズ設定（周波数分解能を高めるため8192に設定）
     analyser.fftSize = 8192;
     microphone = audioContext.createMediaStreamSource(stream);
     microphone.connect(analyser);
-
     dataArray = new Float32Array(analyser.frequencyBinCount);
     analyzeRPM();
+  } catch (err) {
+    alert('マイクエラー: ' + err);
+  }
+}
+
+function analyzeRPM() {
+  requestAnimationFrame(analyzeRPM);
+  if (!analyser) return;
+
+  analyser.getFloatFrequencyData(dataArray);
+  const sampleRate = audioContext.sampleRate;
+  const fftSize = analyser.fftSize;
+
+  let maxVolume = -Infinity;
+  let targetBin = 0;
+  const minBin = Math.floor(10 / (sampleRate / fftSize));
+  const maxBin = Math.floor(300 / (sampleRate / fftSize));
+
+  for (let i = minBin; i < maxBin; i++) {
+    if (dataArray[i] > maxVolume) {
+      maxVolume = dataArray[i];
+      targetBin = i;
+    }
+  }
+
+  const dominantFrequency = targetBin * (sampleRate / fftSize);
+
+  if (maxVolume > -80 && dominantFrequency > 0) {
+    const rawRpm = (dominantFrequency * 60) / strokeCycles;
+    const finalRpm = Math.round(rawRpm * calibMultiplier);
+
+    if (finalRpm > 400 && finalRpm < 8000) {
+      currentRpm = finalRpm;
+      document.getElementById('rpm-readout').innerHTML = `${currentRpm} <span>RPM</span>`;
+    }
+  }
+}
+
+function initGPS() {
+  if ('geolocation' in navigator) {
+    navigator.geolocation.watchPosition((pos) => {
+      const speedMps = pos.coords.speed || 0;
+      currentSpeed = speedMps * 1.94384; // knots
+      document.getElementById('speed-val').innerText = currentSpeed.toFixed(1);
+    }, null, { enableHighAccuracy: true });
+  }
+}
+
+function initSensors() {
+  window.addEventListener('deviceorientation', (e) => {
+    if (e.beta !== null) {
+      pitchAngle = Math.round(e.beta);  // ピッチ
+      rollAngle = Math.round(e.gamma);   // ロール
+    }
+  });
+
+  window.addEventListener('devicemotion', (e) => {
+    if (e.rotationRate && e.rotationRate.alpha !== null) {
+      yawRate = Math.round(e.rotationRate.alpha);
+      document.getElementById('yaw-val').innerText = yawRate;
+    }
+  });
+}
   } catch (err) {
     alert('マイクのアクセス許可が必要です: ' + err);
   }
