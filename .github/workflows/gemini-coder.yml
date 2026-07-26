@@ -49,8 +49,8 @@ jobs:
           '''
 
           response = client.models.generate_content(
-              model='gemini-2.5-flash',
-              contents=prompt
+          model='gemini-2.5-flash',  # ←ここを 'gemini-2.5-flash' または 'gemini-1.5-flash' に変更
+          contents=prompt,
           )
 
           # 生成された結果を一時ファイルに記録
